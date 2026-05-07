@@ -28,7 +28,10 @@ create table bookings (
   end_time timestamptz,
   duration_hours numeric,
   total_price numeric,
-  status text default 'pending', -- 'pending' | 'active' | 'completed' | 'cancelled'
+  payment_method text default 'cash', -- 'cash' | 'qris'
+  payment_status text default 'unpaid', -- 'unpaid' | 'paid'
+  payment_proof_url text,
+  status text default 'pending', -- 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled'
   notes text,
   created_at timestamptz default now()
 );
@@ -89,3 +92,10 @@ create trigger on_auth_user_created
 
 -- Supabase Realtime
 alter publication supabase_realtime add table notifications;
+
+-- Create Storage Bucket for Payment Proofs
+insert into storage.buckets (id, name, public) values ('payment-proofs', 'payment-proofs', true);
+
+-- Enable Storage RLS Policies
+create policy "Anyone can upload payment proof" on storage.objects for insert with check ( bucket_id = 'payment-proofs' );
+create policy "Anyone can view payment proof" on storage.objects for select using ( bucket_id = 'payment-proofs' );

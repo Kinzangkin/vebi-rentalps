@@ -13,6 +13,7 @@ import { formatPrice, calculateTotalPrice } from '@/lib/utils/helpers'
 import { toast } from 'react-hot-toast'
 import { Loader2, CalendarDays, Gamepad2 } from 'lucide-react'
 import type { PsUnit } from '@/types'
+import { createBooking } from './actions'
 
 export default function BookingPage() {
   const { user } = useAuth()
@@ -27,6 +28,8 @@ export default function BookingPage() {
   const [startTime, setStartTime] = useState('')
   const [duration, setDuration] = useState<number>(1)
   const [notes, setNotes] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash')
+  const [paymentFile, setPaymentFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [fetchingUnits, setFetchingUnits] = useState(true)
 
@@ -35,7 +38,7 @@ export default function BookingPage() {
       const { data } = await supabase
         .from('ps_units')
         .select('*')
-        .eq('status', 'available')
+        .neq('status', 'maintenance')
         .order('name')
 
       if (data) setUnits(data)
@@ -59,19 +62,48 @@ export default function BookingPage() {
     const startDateTime = new Date(`${startDate}T${startTime}:00`)
     const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 60 * 1000)
 
-    const { error } = await supabase.from('bookings').insert({
-      customer_id: user.id,
+    let paymentProofUrl = null
+
+    if (paymentMethod === 'qris') {
+      if (!paymentFile) {
+        toast.error('Mohon upload bukti pembayaran QRIS')
+        setLoading(false)
+        return
+      }
+
+      const fileExt = paymentFile.name.split('.').pop()
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('payment-proofs')
+        .upload(fileName, paymentFile)
+
+      if (uploadError) {
+        toast.error('Gagal mengupload bukti pembayaran. Pastikan admin sudah membuat bucket payment-proofs.')
+        setLoading(false)
+        return
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('payment-proofs')
+        .getPublicUrl(fileName)
+
+      paymentProofUrl = publicUrl
+    }
+
+    const res = await createBooking({
       ps_unit_id: selectedUnit,
       start_time: startDateTime.toISOString(),
       end_time: endDateTime.toISOString(),
       duration_hours: duration,
       total_price: totalPrice,
-      notes: notes || null,
-      status: 'pending',
+      payment_method: paymentMethod,
+      payment_proof_url: paymentProofUrl,
+      notes: notes,
     })
 
-    if (error) {
-      toast.error('Gagal membuat booking: ' + error.message)
+    if (res.error) {
+      toast.error(res.error)
       setLoading(false)
       return
     }
@@ -170,6 +202,57 @@ export default function BookingPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-3 pt-2">
+              <Label>Metode Pembayaran</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div
+                  className={`border rounded-lg p-4 cursor-pointer text-center transition-colors ${paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+                  onClick={() => setPaymentMethod('cash')}
+                >
+                  <p className="font-semibold">Bayar di Tempat</p>
+                  <p className="text-xs text-muted-foreground mt-1">Cash</p>
+                </div>
+                <div
+                  className={`border rounded-lg p-4 cursor-pointer text-center transition-colors ${paymentMethod === 'qris' ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+                  onClick={() => setPaymentMethod('qris')}
+                >
+                  <p className="font-semibold">QRIS</p>
+                  <p className="text-xs text-muted-foreground mt-1">Non-Tunai</p>
+                </div>
+              </div>
+
+              {paymentMethod === 'qris' && (
+                <div className="mt-4 p-5 border rounded-lg bg-muted/20 space-y-5">
+                  <div className="text-center space-y-3">
+                    <p className="text-sm font-medium">Scan QR Code di bawah ini</p>
+                    <div className="flex justify-center bg-white p-4 rounded-lg w-fit mx-auto shadow-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=RentalPS_Total_${totalPrice}`} 
+                        alt="QRIS" 
+                        className="w-40 h-40" 
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Total Tagihan: <span className="font-bold text-foreground">{formatPrice(totalPrice)}</span>
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="payment_proof">Upload Bukti Transfer</Label>
+                    <Input
+                      id="payment_proof"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+                      required={paymentMethod === 'qris'}
+                      className="cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Price Summary */}

@@ -32,6 +32,8 @@ export function getStatusColor(status: string): string {
       return 'bg-red-500/15 text-red-700 border-red-500/30'
     case 'pending':
       return 'bg-yellow-500/15 text-yellow-700 border-yellow-500/30'
+    case 'confirmed':
+      return 'bg-indigo-500/15 text-indigo-700 border-indigo-500/30'
     case 'active':
       return 'bg-blue-500/15 text-blue-700 border-blue-500/30'
     case 'completed':

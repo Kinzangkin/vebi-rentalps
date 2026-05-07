@@ -19,10 +19,9 @@ export interface PsUnit {
   status: PsUnitStatus
   price_per_hour: number
   image_url: string | null
-  created_at: string
-}
-
-export type BookingStatus = 'pending' | 'active' | 'completed' | 'cancelled'
+export type BookingStatus = 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled'
+export type PaymentMethod = 'cash' | 'qris'
+export type PaymentStatus = 'unpaid' | 'paid'
 
 export interface Booking {
   id: string
@@ -33,6 +32,9 @@ export interface Booking {
   duration_hours: number
   total_price: number
   status: BookingStatus
+  payment_method: PaymentMethod
+  payment_status: PaymentStatus
+  payment_proof_url: string | null
   notes: string | null
   created_at: string
   // Joined fields
@@ -40,7 +42,7 @@ export interface Booking {
   profiles?: Profile
 }
 
-export type NotificationType = 'booking_confirmed' | 'booking_reminder' | 'booking_completed'
+export type NotificationType = 'booking_confirmed' | 'booking_started' | 'booking_reminder' | 'booking_completed'
 
 export interface Notification {
   id: string

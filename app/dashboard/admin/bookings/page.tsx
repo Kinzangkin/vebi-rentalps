@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table'
 import { formatPrice, formatDateTime, getStatusColor } from '@/lib/utils/helpers'
 import { toast } from 'react-hot-toast'
-import { Loader2, Check, X, CheckCircle2, CalendarDays } from 'lucide-react'
+import { Loader2, Check, X, CheckCircle2, CalendarDays, Play, ImageIcon } from 'lucide-react'
 import type { Booking } from '@/types'
 
 export default function AdminBookingsPage() {
@@ -50,10 +50,19 @@ export default function AdminBookingsPage() {
   async function updateBookingStatus(bookingId: string, newStatus: string, unitId: string) {
     setProcessing(bookingId)
 
+    const booking = bookings.find((b) => b.id === bookingId)
+    let updatePayload: any = { status: newStatus }
+
+    if (booking?.payment_method === 'qris' && newStatus === 'confirmed') {
+      updatePayload.payment_status = 'paid'
+    } else if (newStatus === 'completed') {
+      updatePayload.payment_status = 'paid'
+    }
+
     // Update booking status
     const { error } = await supabase
       .from('bookings')
-      .update({ status: newStatus })
+      .update(updatePayload)
       .eq('id', bookingId)
 
     if (error) {
@@ -70,16 +79,19 @@ export default function AdminBookingsPage() {
     }
 
     // Find the booking to get customer ID for notification
-    const booking = bookings.find((b) => b.id === bookingId)
     if (booking) {
       let notifTitle = ''
       let notifMessage = ''
       let notifType = ''
 
-      if (newStatus === 'active') {
+      if (newStatus === 'confirmed') {
         notifTitle = 'Booking Dikonfirmasi!'
-        notifMessage = `Booking Anda untuk ${booking.ps_unit?.name} telah dikonfirmasi. Selamat bermain!`
+        notifMessage = `Booking Anda untuk ${booking.ps_unit?.name} telah dikonfirmasi. Harap datang tepat waktu.`
         notifType = 'booking_confirmed'
+      } else if (newStatus === 'active') {
+        notifTitle = 'Waktu Bermain Dimulai!'
+        notifMessage = `Waktu bermain Anda untuk ${booking.ps_unit?.name} telah dimulai. Selamat bermain!`
+        notifType = 'booking_started'
       } else if (newStatus === 'completed') {
         notifTitle = 'Booking Selesai'
         notifMessage = `Booking Anda untuk ${booking.ps_unit?.name} telah selesai. Terima kasih!`
@@ -119,6 +131,7 @@ export default function AdminBookingsPage() {
           <SelectContent>
             <SelectItem value="all">Semua</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="confirmed">Dikonfirmasi</SelectItem>
             <SelectItem value="active">Aktif</SelectItem>
             <SelectItem value="completed">Selesai</SelectItem>
             <SelectItem value="cancelled">Dibatalkan</SelectItem>
@@ -146,6 +159,7 @@ export default function AdminBookingsPage() {
                   <TableHead>Waktu</TableHead>
                   <TableHead>Durasi</TableHead>
                   <TableHead>Total</TableHead>
+                  <TableHead>Pembayaran</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -167,6 +181,19 @@ export default function AdminBookingsPage() {
                     <TableCell>{booking.duration_hours} jam</TableCell>
                     <TableCell className="font-semibold">{formatPrice(booking.total_price)}</TableCell>
                     <TableCell>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="text-sm font-medium uppercase tracking-wider">{booking.payment_method}</span>
+                        <Badge variant="outline" className={`text-[10px] h-5 ${booking.payment_status === 'paid' ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' : 'bg-red-500/15 text-red-700 border-red-500/30'}`}>
+                          {booking.payment_status === 'paid' ? 'LUNAS' : 'BELUM LUNAS'}
+                        </Badge>
+                        {booking.payment_proof_url && (
+                          <a href={booking.payment_proof_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 mt-1 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
+                            <ImageIcon className="h-3 w-3" /> Bukti
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline" className={getStatusColor(booking.status)}>
                         {booking.status}
                       </Badge>
@@ -180,8 +207,8 @@ export default function AdminBookingsPage() {
                               size="icon"
                               className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                               disabled={processing === booking.id}
-                              onClick={() => updateBookingStatus(booking.id, 'active', booking.ps_unit_id)}
-                              title="Approve"
+                              onClick={() => updateBookingStatus(booking.id, 'confirmed', booking.ps_unit_id)}
+                              title="Confirm"
                             >
                               {processing === booking.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -201,11 +228,27 @@ export default function AdminBookingsPage() {
                             </Button>
                           </>
                         )}
-                        {booking.status === 'active' && (
+                        {booking.status === 'confirmed' && (
                           <Button
                             variant="ghost"
                             size="icon"
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            disabled={processing === booking.id}
+                            onClick={() => updateBookingStatus(booking.id, 'active', booking.ps_unit_id)}
+                            title="Start Play"
+                          >
+                            {processing === booking.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Play className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        {booking.status === 'active' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                             disabled={processing === booking.id}
                             onClick={() => updateBookingStatus(booking.id, 'completed', booking.ps_unit_id)}
                             title="Complete"

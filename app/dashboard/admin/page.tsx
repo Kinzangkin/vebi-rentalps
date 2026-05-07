@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Gamepad2, CalendarDays, DollarSign, Clock, LayoutDashboard, Activity } from 'lucide-react'
 import { formatPrice } from '@/lib/utils/helpers'
 
